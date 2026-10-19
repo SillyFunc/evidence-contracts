@@ -11,6 +11,7 @@
 | 区块链 | FISCO BCOS 2.11.0，非国密模式 |
 | 部署工具 | WeBASE |
 | Solidity | `0.6.10` |
+| 本地及 CI 测试工具 | Foundry `v1.7.1` |
 | ABI 编码 | `ABIEncoderV2` |
 | EVM 目标 | `istanbul` |
 | 优化器 | 开启，`200` runs |
@@ -30,7 +31,7 @@ forge test
 forge fmt --check src/CarbonEvidenceRegistry.sol test/CarbonEvidenceRegistry.t.sol
 ```
 
-`foundry.toml` 的合约大小上限为 `262144` 字节，大小检查脚本读取编译产物进行检查。Foundry 配置跳过 `Counter` 示例合约、测试和脚本。部署与实际交易执行使用 WeBASE 或 FISCO SDK。
+`foundry.toml` 的合约大小上限为 `262144` 字节，大小检查脚本读取编译产物进行检查。Foundry 配置跳过 `Counter` 示例合约、测试和脚本，并关闭与 Solidity 0.6.10 不兼容的动态测试链接（`dynamic_test_linking = false`）。部署与实际交易执行使用 WeBASE 或 FISCO SDK。
 
 VS Code 的 JuanBlanco Solidity 扩展使用项目中的 `.vscode/settings.json`，编译器固定为 `v0.6.10+commit.00c0fcaf`。首次使用由扩展下载对应编译器；修改配置后可执行 `Developer: Reload Window` 重新加载。编辑器、Foundry 和 WeBASE 各自的编译器均应使用 `0.6.10`。
 
