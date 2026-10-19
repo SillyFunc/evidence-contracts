@@ -28,7 +28,7 @@ contract CarbonEvidenceRegistryTest {
     CarbonEvidenceRegistry private registry;
 
     function setUp() public {
-        registry = new CarbonEvidenceRegistry();
+        registry = new CarbonEvidenceRegistry(address(this));
         registry.setAdmin(ADMIN, true);
         // FISCO BCOS 2.11 passes milliseconds to block.timestamp.
         vm.warp(FISCO_TIMESTAMP_MS);
@@ -42,6 +42,50 @@ contract CarbonEvidenceRegistryTest {
 
         registry.setAdmin(address(this), true);
         require(registry.createResourceEvidence(_input("OWNER"), _resourceProject(), _resourceCore()), "owner create");
+    }
+
+    function testExplicitInitialOwnerControlsRegistryInsteadOfDeployer() public {
+        CarbonEvidenceRegistry explicitRegistry = new CarbonEvidenceRegistry(NEXT_OWNER);
+        require(explicitRegistry.owner() == NEXT_OWNER, "explicit owner ignored");
+        require(!explicitRegistry.admins(address(this)), "deployer unexpectedly admin");
+        require(!explicitRegistry.admins(NEXT_OWNER), "initial owner unexpectedly admin");
+
+        _expect("owner only");
+        explicitRegistry.setAdmin(ADMIN, true);
+        _expect("owner only");
+        explicitRegistry.transferOwnership(HOLDER);
+        _expect("admin only");
+        explicitRegistry.createResourceEvidence(_input("DEPLOYER-DENIED"), _resourceProject(), _resourceCore());
+        require(!explicitRegistry.evidenceNoExists("DEPLOYER-DENIED"), "deployer created evidence");
+        require(explicitRegistry.getEvidenceCount() == 0, "deployer changed index");
+
+        vm.prank(NEXT_OWNER);
+        explicitRegistry.setAdmin(ADMIN, true);
+        require(explicitRegistry.admins(ADMIN), "initial owner cannot authorize admin");
+        vm.prank(NEXT_OWNER);
+        explicitRegistry.transferOwnership(HOLDER);
+        require(explicitRegistry.owner() == HOLDER, "initial owner cannot transfer");
+        require(explicitRegistry.admins(ADMIN), "transfer revoked admin");
+        require(!explicitRegistry.admins(NEXT_OWNER), "initial owner implicitly admin");
+        require(!explicitRegistry.admins(HOLDER), "successor implicitly admin");
+    }
+
+    function testInitialOwnerCannotBeZero() public {
+        _expect("owner zero");
+        new CarbonEvidenceRegistry(address(0));
+    }
+
+    function testConstructionEmitsSpecifiedOwner() public {
+        vm.recordLogs();
+        CarbonEvidenceRegistry explicitRegistry = new CarbonEvidenceRegistry(NEXT_OWNER);
+        RegistryVm.Log[] memory logs = vm.getRecordedLogs();
+        require(logs.length == 1, "construction event count");
+        require(logs[0].emitter == address(explicitRegistry), "construction event emitter");
+        require(logs[0].topics.length == 3, "construction event topics");
+        require(logs[0].topics[0] == keccak256("OwnershipTransferred(address,address)"), "construction event signature");
+        require(logs[0].topics[1] == bytes32(0), "construction event previous owner");
+        require(logs[0].topics[2] == bytes32(uint256(uint160(NEXT_OWNER))), "construction event initial owner");
+        require(logs[0].data.length == 0, "construction event data");
     }
 
     function testOnlyOwnerCanManageAdmins() public {

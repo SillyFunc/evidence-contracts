@@ -223,9 +223,11 @@ contract CarbonEvidenceRegistry {
         _;
     }
 
-    constructor() public {
-        owner = msg.sender;
-        emit OwnershipTransferred(address(0), msg.sender);
+    /// @notice Set the management wallet explicitly, independently of the deployment signer.
+    constructor(address initialOwner) public {
+        require(initialOwner != address(0), "owner zero");
+        owner = initialOwner;
+        emit OwnershipTransferred(address(0), initialOwner);
     }
 
     /// @notice Owner and administrator are independent roles.

@@ -1,0 +1,6 @@
+{
+  "solidity.defaultCompiler": "remote",
+  "solidity.compileUsingRemoteVersion": "v0.6.10+commit.00c0fcaf",
+  "solidity.evmVersion": "istanbul",
+  "solidity.compilerOptimization": 200
+}

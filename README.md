@@ -14,10 +14,12 @@
 | ABI 编码 | `ABIEncoderV2` |
 | EVM 目标 | `istanbul` |
 | 优化器 | 开启，`200` runs |
-| 构造参数 | 无 |
+| 构造参数 | `address initialOwner`：初始 Owner 的链地址，不能为零地址 |
 | 外部合约依赖 | 无 |
 
-将合约源码导入 WeBASE，按上述配置编译、部署。调用接口时使用对应编译产物的 ABI，按结构体字段顺序编码参数。
+将合约源码导入 WeBASE，按上述配置编译，在构造参数 `initialOwner` 中填写自己控制的钱包地址后部署。WeBASE 用于签署部署交易的账户与初始 Owner 可以不同。调用接口时使用对应编译产物的 ABI，按结构体字段顺序编码参数。
+
+部署成功后调用 `owner()`，确认返回的地址与填写的 `initialOwner` 一致。调用 `setAdmin`、`transferOwnership` 时，交易必须由当前 Owner 对应的私钥签名：可通过 FISCO SDK 使用该钱包私钥发起调用，或在 WeBASE 中使用与 Owner 地址匹配的私钥用户。在 WeBASE 中登记一个公钥地址不会获得该地址的签名能力。
 
 本地编译和验证命令：
 
@@ -30,6 +32,8 @@ forge fmt --check src/CarbonEvidenceRegistry.sol test/CarbonEvidenceRegistry.t.s
 
 `foundry.toml` 的合约大小上限为 `262144` 字节，大小检查脚本读取编译产物进行检查。Foundry 配置跳过 `Counter` 示例合约、测试和脚本。部署与实际交易执行使用 WeBASE 或 FISCO SDK。
 
+VS Code 的 JuanBlanco Solidity 扩展使用项目中的 `.vscode/settings.json`，编译器固定为 `v0.6.10+commit.00c0fcaf`。首次使用由扩展下载对应编译器；修改配置后可执行 `Developer: Reload Window` 重新加载。编辑器、Foundry 和 WeBASE 各自的编译器均应使用 `0.6.10`。
+
 ## 权限
 
 Owner 负责管理管理员和转移 Owner；管理员负责创建存证。两种角色独立，查询接口对任意调用地址开放。
@@ -41,7 +45,7 @@ Owner 负责管理管理员和转移 Owner；管理员负责创建存证。两�
 | 六个 `create…Evidence` | 管理员 | 创建存证 |
 | 所有查询接口 | 任意地址 | 读取记录、权限状态或输入边界 |
 
-部署者成为 Owner，管理员名单初始为空。Owner 要创建存证，也需要调用 `setAdmin` 授权自己的地址。
+构造函数将 `initialOwner` 设为 Owner，管理员名单初始为空。部署者不会因签署部署交易而自动获得权限。Owner 要创建存证，也需要调用 `setAdmin` 授权自己的地址。
 
 Owner 转移在一次调用中生效。管理员名单保持原值，原 Owner 已有的管理员权限保留，新 Owner 不会自动获得管理员权限。
 
@@ -243,7 +247,7 @@ Owner 转移在一次调用中生效。管理员名单保持原值，原 Owner �
 
 | 事件 | 触发时机及字段 |
 | --- | --- |
-| `OwnershipTransferred(previousOwner, newOwner)` | 部署和转移 Owner 时触发；两个地址均为索引字段，部署时 `previousOwner` 为零地址 |
+| `OwnershipTransferred(previousOwner, newOwner)` | 部署和转移 Owner 时触发；两个地址均为索引字段，部署时 `previousOwner` 为零地址、`newOwner` 为 `initialOwner` |
 | `AdminUpdated(account, enabled, operator)` | 设置或撤销管理员时触发；`account`、`operator` 为索引字段 |
 | `EvidenceCreated(evidenceKey, holderAddress, category, evidenceNo, creator, createTime)` | 创建存证时触发；前三项为索引字段 |
 
@@ -251,7 +255,7 @@ Owner 转移在一次调用中生效。管理员名单保持原值，原 Owner �
 
 ## 调用示例
 
-部署后，由 Owner 调用 `setAdmin(管理员地址, true)`。该管理员随后调用对应类别的创建接口。
+部署时为构造参数 `initialOwner` 填入管理钱包地址，例如 `0x1111111111111111111111111111111111111111`。部署完成后，由该 Owner 钱包签名调用 `setAdmin(管理员地址, true)`。该管理员随后调用对应类别的创建接口。
 
 以下 JSON 展示 `createResourceEvidence(input, project, core)` 三个参数的 tuple 字段顺序，所有资料均为虚构示例：
 
