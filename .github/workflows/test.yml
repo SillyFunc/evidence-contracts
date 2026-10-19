@@ -1,0 +1,38 @@
+name: CI
+
+permissions: {}
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Foundry project
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Show Forge version
+        run: forge --version
+
+      - name: Run Forge fmt
+        run: forge fmt --check src/CarbonEvidenceRegistry.sol test/CarbonEvidenceRegistry.t.sol
+
+      - name: Run Forge build
+        run: forge build
+
+      - name: Check FISCO contract size
+        run: python3 scripts/check_contract_size.py
+
+      - name: Run Forge tests
+        run: forge test -vvv
