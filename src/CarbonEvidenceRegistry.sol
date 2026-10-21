@@ -230,9 +230,20 @@ contract CarbonEvidenceRegistry {
         emit OwnershipTransferred(address(0), initialOwner);
     }
 
-    /// @notice Owner and administrator are independent roles.
-    function setAdmin(address account, bool enabled) external onlyOwner {
+    /// @notice Owner and administrator are independent roles; granting an existing admin is a silent no-op.
+    function setAdmin(address account) external onlyOwner {
+        _updateAdmin(account, true);
+    }
+
+    /// @notice Revoke administrator rights; revoking a non-admin is a silent no-op.
+    function removeAdmin(address account) external onlyOwner {
+        _updateAdmin(account, false);
+    }
+
+    /// @dev AdminUpdated is emitted only for actual changes, so indexers can rebuild the admin set from events.
+    function _updateAdmin(address account, bool enabled) internal {
         require(account != address(0), "admin zero");
+        if (admins[account] == enabled) return;
         admins[account] = enabled;
         emit AdminUpdated(account, enabled, msg.sender);
     }

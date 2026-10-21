@@ -29,7 +29,7 @@ contract CarbonEvidenceRegistryTest {
 
     function setUp() public {
         registry = new CarbonEvidenceRegistry(address(this));
-        registry.setAdmin(ADMIN, true);
+        registry.setAdmin(ADMIN);
         // FISCO BCOS 2.11 passes milliseconds to block.timestamp.
         vm.warp(FISCO_TIMESTAMP_MS);
     }
@@ -40,7 +40,7 @@ contract CarbonEvidenceRegistryTest {
         _expect("admin only");
         registry.createResourceEvidence(_input("OWNER"), _resourceProject(), _resourceCore());
 
-        registry.setAdmin(address(this), true);
+        registry.setAdmin(address(this));
         require(registry.createResourceEvidence(_input("OWNER"), _resourceProject(), _resourceCore()), "owner create");
     }
 
@@ -51,7 +51,7 @@ contract CarbonEvidenceRegistryTest {
         require(!explicitRegistry.admins(NEXT_OWNER), "initial owner unexpectedly admin");
 
         _expect("owner only");
-        explicitRegistry.setAdmin(ADMIN, true);
+        explicitRegistry.setAdmin(ADMIN);
         _expect("owner only");
         explicitRegistry.transferOwnership(HOLDER);
         _expect("admin only");
@@ -60,7 +60,7 @@ contract CarbonEvidenceRegistryTest {
         require(explicitRegistry.getEvidenceCount() == 0, "deployer changed index");
 
         vm.prank(NEXT_OWNER);
-        explicitRegistry.setAdmin(ADMIN, true);
+        explicitRegistry.setAdmin(ADMIN);
         require(explicitRegistry.admins(ADMIN), "initial owner cannot authorize admin");
         vm.prank(NEXT_OWNER);
         explicitRegistry.transferOwnership(HOLDER);
@@ -91,19 +91,19 @@ contract CarbonEvidenceRegistryTest {
     function testOnlyOwnerCanManageAdmins() public {
         _expect("owner only");
         vm.prank(ADMIN);
-        registry.setAdmin(HOLDER, true);
+        registry.setAdmin(HOLDER);
         require(!registry.admins(HOLDER), "unauthorized admin addition");
 
         _expect("admin zero");
-        registry.setAdmin(address(0), true);
+        registry.setAdmin(address(0));
     }
 
     function testMultipleAdminsAndRevocation() public {
-        registry.setAdmin(HOLDER, true);
+        registry.setAdmin(HOLDER);
         _createResource("FIRST");
         vm.prank(HOLDER);
         registry.createResourceEvidence(_input("SECOND"), _resourceProject(), _resourceCore());
-        registry.setAdmin(ADMIN, false);
+        registry.removeAdmin(ADMIN);
 
         _expect("admin only");
         vm.prank(ADMIN);
@@ -113,9 +113,46 @@ contract CarbonEvidenceRegistryTest {
         require(!registry.evidenceNoExists("DENIED"), "unauthorized record stored");
     }
 
+    function testOnlyOwnerCanRemoveAdmins() public {
+        _expect("owner only");
+        vm.prank(ADMIN);
+        registry.removeAdmin(ADMIN);
+        require(registry.admins(ADMIN), "unauthorized admin removal");
+
+        _expect("admin zero");
+        registry.removeAdmin(address(0));
+    }
+
+    function testAdminEventsReportGrantAndRevocation() public {
+        vm.recordLogs();
+        registry.setAdmin(HOLDER);
+        registry.removeAdmin(HOLDER);
+        RegistryVm.Log[] memory logs = vm.getRecordedLogs();
+        require(logs.length == 2, "admin event count");
+        for (uint256 i = 0; i < 2; i++) {
+            require(logs[i].emitter == address(registry), "admin event emitter");
+            require(logs[i].topics.length == 3, "admin event topics");
+            require(logs[i].topics[0] == keccak256("AdminUpdated(address,bool,address)"), "admin event signature");
+            require(logs[i].topics[1] == bytes32(uint256(uint160(HOLDER))), "admin event account");
+            require(logs[i].topics[2] == bytes32(uint256(uint160(address(this)))), "admin event operator");
+        }
+        require(abi.decode(logs[0].data, (bool)), "grant event flag");
+        require(!abi.decode(logs[1].data, (bool)), "revoke event flag");
+        require(!registry.admins(HOLDER), "admin not removed");
+    }
+
+    function testUnchangedAdminStateIsSilentNoOp() public {
+        vm.recordLogs();
+        registry.removeAdmin(HOLDER);
+        registry.setAdmin(ADMIN);
+        require(vm.getRecordedLogs().length == 0, "unchanged admin state emitted event");
+        require(!registry.admins(HOLDER), "non-admin removal granted admin");
+        require(registry.admins(ADMIN), "repeated grant revoked admin");
+    }
+
     function testOwnershipTransferIsImmediateAndPreservesAdmins() public {
         // A previous owner's explicitly granted admin role remains explicit.
-        registry.setAdmin(address(this), true);
+        registry.setAdmin(address(this));
         vm.recordLogs();
         registry.transferOwnership(NEXT_OWNER);
         require(registry.owner() == NEXT_OWNER, "owner not changed immediately");
@@ -132,9 +169,9 @@ contract CarbonEvidenceRegistryTest {
         require(logs[0].data.length == 0, "ownership event data");
 
         _expect("owner only");
-        registry.setAdmin(HOLDER, true);
+        registry.setAdmin(HOLDER);
         vm.prank(NEXT_OWNER);
-        registry.setAdmin(HOLDER, true);
+        registry.setAdmin(HOLDER);
         require(registry.admins(HOLDER), "new owner cannot manage admins");
     }
 
@@ -157,9 +194,9 @@ contract CarbonEvidenceRegistryTest {
         require(registry.owner() == HOLDER, "new owner cannot transfer again");
         _expect("owner only");
         vm.prank(NEXT_OWNER);
-        registry.setAdmin(NEXT_OWNER, true);
+        registry.setAdmin(NEXT_OWNER);
         vm.prank(HOLDER);
-        registry.setAdmin(NEXT_OWNER, true);
+        registry.setAdmin(NEXT_OWNER);
         require(registry.admins(NEXT_OWNER), "successor cannot manage admins");
         require(registry.admins(ADMIN), "transfer revoked existing admin");
         require(!registry.admins(HOLDER), "successor implicitly admin");
