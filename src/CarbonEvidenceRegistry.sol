@@ -78,6 +78,7 @@ contract CarbonEvidenceRegistry {
         string verificationSummary;
         string remark;
         FileInfo[] fileList;
+        string[] extraData; // Optional supplementary material; format defined by the business system.
     }
 
     struct EvidenceCommon {
@@ -445,6 +446,9 @@ contract CarbonEvidenceRegistry {
             file.fileName = input.fileList[i].fileName;
             file.fileSize = input.fileList[i].fileSize;
         }
+        for (uint256 i = 0; i < input.extraData.length; i++) {
+            saved.data.extraData.push(input.extraData[i]);
+        }
         saved.category = category;
         saved.creator = msg.sender;
         saved.createTime = block.timestamp / 1000;
@@ -497,6 +501,10 @@ contract CarbonEvidenceRegistry {
             _text(file.fileHash, 256, true);
             _text(file.fileName, 256, true);
             require(file.fileSize > 0, "file size zero");
+        }
+        // extraData has no item count limit; the transaction gas limit bounds it.
+        for (uint256 i = 0; i < input.extraData.length; i++) {
+            _text(input.extraData[i], MAX_LONG_TEXT_BYTES, true);
         }
     }
 

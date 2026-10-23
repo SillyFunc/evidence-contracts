@@ -53,6 +53,8 @@ Owner 转移在一次调用中生效。管理员名单保持原值，原 Owner �
 
 > **接口变更**：旧版的 `setAdmin(address account, bool enabled)` 已拆分为 `setAdmin(address account)` 和 `removeAdmin(address account)`，函数选择器随之改变。旧版部署的实例只接受旧接口，新版部署的实例只接受新接口；在旧实例上使用新 ABI，或在新实例上使用旧 ABI，交易都会回滚且不带回滚信息。合约不可升级，WeBASE 和 SDK 中保存的 ABI 必须与实际部署的版本一致。
 
+> **接口变更**：`EvidenceInput` 末尾新增了 `extraData`（`string[]`），六个 `create…Evidence` 的参数结构和函数选择器随之改变，查询接口返回的公共记录也多了这一项。旧实例与新 ABI 互不兼容，规则同上；调用方需按新的字段顺序编码，不需要扩展资料时传空数组 `[]`。
+
 ## 创建逻辑
 
 业务系统完成资料填写、附件上传和审核后，管理员调用对应类别的创建接口，一次提交三个结构体：
@@ -98,10 +100,12 @@ Owner 转移在一次调用中生效。管理员名单保持原值，原 Owner �
 
 | 结构体 | 字段顺序 |
 | --- | --- |
-| `EvidenceInput` | `holderAddress`, `evidenceNo`, `evidenceName`, `certificateInfo`, `evidenceSubject`, `author`, `orgInfo`, `purpose`, `otherPurpose`, `auditInstitution`, `verificationSummary`, `remark`, `fileList` |
+| `EvidenceInput` | `holderAddress`, `evidenceNo`, `evidenceName`, `certificateInfo`, `evidenceSubject`, `author`, `orgInfo`, `purpose`, `otherPurpose`, `auditInstitution`, `verificationSummary`, `remark`, `fileList`, `extraData` |
 | `EvidenceCommon` | `data`, `category`, `creator`, `createTime` |
 
-`EvidenceInput.holderAddress` 为 `address`，`purpose` 为 `string[]`，`fileList` 为 `FileInfo[]`；`certificateInfo`、`evidenceSubject`、`author`、`orgInfo` 分别使用对应子结构体，其余字段为 `string`。
+`EvidenceInput.holderAddress` 为 `address`，`purpose`、`extraData` 为 `string[]`，`fileList` 为 `FileInfo[]`；`certificateInfo`、`evidenceSubject`、`author`、`orgInfo` 分别使用对应子结构体，其余字段为 `string`。
+
+`extraData` 是扩展资料，用于存放现有字段之外的补充资料，由业务系统决定每项的内容和格式（例如 JSON 字符串）；合约只检查每项非空且不超长，不限制项数，也不解析内容。
 
 `EvidenceCommon.data` 保存完整的 `EvidenceInput`，`category` 为 `EvidenceCategory`，`creator` 为 `address`，`createTime` 为 `uint256`。
 
@@ -147,6 +151,7 @@ Owner 转移在一次调用中生效。管理员名单保持原值，原 Owner �
 | --- | --- |
 | `evidenceSubject.legalPerson` | 可为空 |
 | `otherPurpose`, `remark` | 可为空 |
+| `extraData` | 可为空数组；有内容时每项必须非空 |
 | `TradeOffsetProjectInfo.tradePrice`, `TradeOffsetProjectInfo.carbonNeutralScope` | 可为空 |
 | `AssetCoreData.pledgePurpose` | `pledgePurposeApplicable` 为 `true` 时必须非空 |
 | `TechnologyProjectInfo.ipNo`, `TechnologyProjectInfo.applicationCase` | 可为空 |
@@ -163,14 +168,17 @@ Owner 转移在一次调用中生效。管理员名单保持原值，原 Owner �
 | --- | --- |
 | `evidenceNo`, `certificateInfo.digitalId`, `author.realId`, `author.realNo`, `evidenceSubject.subjectNo`, `orgInfo.creditCode`, `orgInfo.contactPhone`, `AssetProjectInfo.accountId` | 不超过 128 字节 |
 | 普通文本及每个 `purpose` 项 | 不超过 2048 字节 |
-| `verificationSummary`, `otherPurpose`, `remark`, `boundaryDesc`, `carbonNeutralScope`, `pledgePurpose`, `applicationCase` | 不超过 6000 字节 |
+| `verificationSummary`, `otherPurpose`, `remark`, `boundaryDesc`, `carbonNeutralScope`, `pledgePurpose`, `applicationCase` 及每个 `extraData` 项 | 不超过 6000 字节 |
 | 每个文件的 `fileType`, `fileHash`, `fileName` | 各不超过 256 字节 |
 | `purpose` | 1 至 8 项，每项非空 |
 | `fileList` | 1 至 32 项 |
+| `extraData` | 不限项数，每项非空 |
 | `FileInfo.fileSize` | 大于零 |
 | 分页 `limit` | 1 至 50 |
 
 上述边界可通过 `MAX_ID_BYTES()`、`MAX_TEXT_BYTES()`、`MAX_LONG_TEXT_BYTES()`、`MAX_PURPOSES()`、`MAX_FILES()` 和 `MAX_PAGE_SIZE()` 查询。文件的 256 字节上限直接定义在校验逻辑中。
+
+`extraData` 不限项数，实际上限取决于交易 gas 上限。每个 6000 字节的项约消耗 380 万 gas；按 FISCO BCOS 2.x 默认的 3 亿交易 gas 上限计算，其余字段全部取最大值时约可容纳 58 项，资料较少时可更多。超出时交易因 gas 不足回滚，不保留记录。业务系统应自行控制项数和总长度。
 
 ### 文件信息
 
@@ -288,7 +296,8 @@ Owner 转移在一次调用中生效。管理员名单保持原值，原 Owner �
         "material-2026-000001.pdf",
         12
       ]
-    ]
+    ],
+    []
   ],
   [
     "示例林业项目", "林业碳汇", "造林碳汇", "示例省/示例市/示例县",
@@ -298,7 +307,7 @@ Owner 转移在一次调用中生效。管理员名单保持原值，原 Owner �
 ]
 ```
 
-示例哈希为占位内容，实际调用需传入真实文件哈希和对应材料。WeBASE 或 SDK 按编译产物的 ABI 编码 tuple。
+示例哈希为占位内容，实际调用需传入真实文件哈希和对应材料。第一个 tuple 的最后一项 `[]` 是 `extraData`，示例中没有扩展资料。WeBASE 或 SDK 按编译产物的 ABI 编码 tuple。
 
 创建成功后调用 `getResourceEvidence("RESOURCE-2026-000001")`，返回公共记录、资源项目及核心数据。公共记录的 tuple 形状为 `[data, category, creator, createTime]`。
 

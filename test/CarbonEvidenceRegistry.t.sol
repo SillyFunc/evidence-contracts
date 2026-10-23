@@ -695,6 +695,48 @@ contract CarbonEvidenceRegistryTest {
         require(creator == ADMIN && createTime == FISCO_TIMESTAMP_MS / 1000, "event recorded metadata");
     }
 
+    function testExtraDataIsOptionalAndRoundTrips() public {
+        _createResource("NO-EXTRA");
+        require(registry.getEvidenceCommon("NO-EXTRA").data.extraData.length == 0, "extra data default");
+
+        CarbonEvidenceRegistry.EvidenceInput memory input = _input("WITH-EXTRA");
+        input.extraData = new string[](2);
+        input.extraData[0] = "{\"supplement\":\"site survey\"}";
+        input.extraData[1] = _repeatChinese(10);
+        vm.prank(ADMIN);
+        registry.createFootprintEvidence(input, _footprintProject(), _footprintCore());
+        CarbonEvidenceRegistry.EvidenceCommon memory saved = registry.getEvidenceCommon(input.evidenceNo);
+        require(saved.data.extraData.length == 2, "extra data length");
+        _assertString(saved.data.extraData[0], input.extraData[0]);
+        _assertString(saved.data.extraData[1], input.extraData[1]);
+    }
+
+    function testExtraDataHasNoItemCountLimit() public {
+        CarbonEvidenceRegistry.EvidenceInput memory input = _input("MANY-EXTRA");
+        // Well beyond the other list limits, so no item count cap applies.
+        input.extraData = new string[](40);
+        for (uint256 i = 0; i < input.extraData.length; i++) {
+            input.extraData[i] = _repeatAscii(registry.MAX_LONG_TEXT_BYTES());
+        }
+        vm.prank(ADMIN);
+        registry.createResourceEvidence(input, _resourceProject(), _resourceCore());
+        require(registry.getEvidenceCommon(input.evidenceNo).data.extraData.length == 40, "extra data lost");
+    }
+
+    function testExtraDataItemsMustBeNonEmptyAndWithinByteLimit() public {
+        CarbonEvidenceRegistry.EvidenceInput memory input = _input("BAD-EXTRA");
+        input.extraData = new string[](1);
+        _expect("required text");
+        vm.prank(ADMIN);
+        registry.createResourceEvidence(input, _resourceProject(), _resourceCore());
+
+        input.extraData[0] = _repeatAscii(registry.MAX_LONG_TEXT_BYTES() + 1);
+        _expect("text too long");
+        vm.prank(ADMIN);
+        registry.createResourceEvidence(input, _resourceProject(), _resourceCore());
+        require(!registry.evidenceNoExists("BAD-EXTRA"), "invalid extra data stored");
+    }
+
     function testFuzzUnauthorizedCannotCreate(address caller) public {
         if (caller == ADMIN) return;
         _expect("admin only");
@@ -874,7 +916,7 @@ contract CarbonEvidenceRegistryTest {
         }
     }
 
-    /// @dev Every common field, list and number at its accepted maximum.
+    /// @dev Every bounded common field, list and number at its accepted maximum.
     function _maxInput(string memory prefix) private view returns (CarbonEvidenceRegistry.EvidenceInput memory input) {
         string memory id = _repeatAscii(registry.MAX_ID_BYTES());
         string memory t = _repeatAscii(registry.MAX_TEXT_BYTES());
@@ -900,6 +942,7 @@ contract CarbonEvidenceRegistryTest {
         for (uint256 i = 0; i < input.fileList.length; i++) {
             input.fileList[i] = CarbonEvidenceRegistry.FileInfo(fileField, fileField, fileField, uint256(-1));
         }
+        // extraData is unbounded, so it stays empty here; each item adds to this baseline.
     }
 
     /// @dev Measured from the caller, so ABI encoding is included; intrinsic calldata gas is not.
