@@ -22,6 +22,7 @@ contract CarbonEvidenceRegistry {
     uint256 public constant MAX_FILES = 32;
     uint256 public constant MAX_PURPOSES = 8;
     uint256 public constant MAX_PAGE_SIZE = 50;
+    bytes32 private constant PLEDGE_AGREEMENT_FILE_TYPE = keccak256("pledgeAgreement");
 
     struct CertificateInfo {
         string issuer;
@@ -348,10 +349,9 @@ contract CarbonEvidenceRegistry {
     {
         _validateAsset(project, core);
         if (core.pledgeAgreementApplicable) {
-            require(input.fileList.length <= MAX_FILES, "file count");
             bool found;
             for (uint256 i = 0; i < input.fileList.length; i++) {
-                if (keccak256(bytes(input.fileList[i].fileType)) == keccak256(bytes("pledgeAgreement"))) {
+                if (keccak256(bytes(input.fileList[i].fileType)) == PLEDGE_AGREEMENT_FILE_TYPE) {
                     found = true;
                     break;
                 }

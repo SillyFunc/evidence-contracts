@@ -25,7 +25,13 @@ contract CarbonEvidenceRegistryTest {
     address private constant HOLDER = address(0xB0B);
     address private constant NEXT_OWNER = address(0xC0FFEE);
     uint256 private constant FISCO_TIMESTAMP_MS = 1700000000123;
+    // FISCO BCOS 2.x default group genesis [tx] gas_limit; confirm the target chain's value.
+    uint256 private constant FISCO_DEFAULT_TX_GAS_LIMIT = 300000000;
+    uint256 private constant MAX_FILE_FIELD_BYTES = 256;
     CarbonEvidenceRegistry private registry;
+
+    // ds-test style log event, decoded by forge in test output.
+    event log_named_uint(string key, uint256 val);
 
     function setUp() public {
         registry = new CarbonEvidenceRegistry(address(this));
@@ -697,6 +703,103 @@ contract CarbonEvidenceRegistryTest {
         require(registry.getEvidenceCount() == 0, "unauthorized count");
     }
 
+    function testWorstCaseResourceCreationFitsFiscoGasLimit() public {
+        CarbonEvidenceRegistry.EvidenceInput memory input = _maxInput("WORST-RESOURCE");
+        string memory t = _repeatAscii(registry.MAX_TEXT_BYTES());
+        CarbonEvidenceRegistry.ResourceProjectInfo memory project =
+            CarbonEvidenceRegistry.ResourceProjectInfo(t, t, t, t, t, t, t);
+        CarbonEvidenceRegistry.ResourceCoreData memory core = CarbonEvidenceRegistry.ResourceCoreData(t, t, t);
+        vm.prank(ADMIN);
+        uint256 gasBefore = gasleft();
+        registry.createResourceEvidence(input, project, core);
+        _assertWorstCaseGas("createResourceEvidence worst-case gas", gasBefore - gasleft());
+        _assertCommon(
+            registry.getEvidenceCommon(input.evidenceNo), input, CarbonEvidenceRegistry.EvidenceCategory.Resource
+        );
+    }
+
+    function testWorstCaseReductionCreationFitsFiscoGasLimit() public {
+        CarbonEvidenceRegistry.EvidenceInput memory input = _maxInput("WORST-REDUCTION");
+        string memory t = _repeatAscii(registry.MAX_TEXT_BYTES());
+        CarbonEvidenceRegistry.ReductionProjectInfo memory project =
+            CarbonEvidenceRegistry.ReductionProjectInfo(t, t, t, t, t, t, t);
+        CarbonEvidenceRegistry.ReductionCoreData memory core = CarbonEvidenceRegistry.ReductionCoreData(t, t, t);
+        vm.prank(ADMIN);
+        uint256 gasBefore = gasleft();
+        registry.createReductionEvidence(input, project, core);
+        _assertWorstCaseGas("createReductionEvidence worst-case gas", gasBefore - gasleft());
+        _assertCommon(
+            registry.getEvidenceCommon(input.evidenceNo), input, CarbonEvidenceRegistry.EvidenceCategory.Reduction
+        );
+    }
+
+    function testWorstCaseFootprintCreationFitsFiscoGasLimit() public {
+        CarbonEvidenceRegistry.EvidenceInput memory input = _maxInput("WORST-FOOTPRINT");
+        string memory t = _repeatAscii(registry.MAX_TEXT_BYTES());
+        string memory l = _repeatAscii(registry.MAX_LONG_TEXT_BYTES());
+        CarbonEvidenceRegistry.FootprintProjectInfo memory project =
+            CarbonEvidenceRegistry.FootprintProjectInfo(t, t, l, t, t, t);
+        CarbonEvidenceRegistry.FootprintCoreData memory core = CarbonEvidenceRegistry.FootprintCoreData(t, t, t);
+        vm.prank(ADMIN);
+        uint256 gasBefore = gasleft();
+        registry.createFootprintEvidence(input, project, core);
+        _assertWorstCaseGas("createFootprintEvidence worst-case gas", gasBefore - gasleft());
+        _assertCommon(
+            registry.getEvidenceCommon(input.evidenceNo), input, CarbonEvidenceRegistry.EvidenceCategory.Footprint
+        );
+    }
+
+    function testWorstCaseTradeOffsetCreationFitsFiscoGasLimit() public {
+        CarbonEvidenceRegistry.EvidenceInput memory input = _maxInput("WORST-TRADE");
+        string memory t = _repeatAscii(registry.MAX_TEXT_BYTES());
+        string memory l = _repeatAscii(registry.MAX_LONG_TEXT_BYTES());
+        CarbonEvidenceRegistry.TradeOffsetProjectInfo memory project =
+            CarbonEvidenceRegistry.TradeOffsetProjectInfo(t, t, t, t, t, t, t, l);
+        CarbonEvidenceRegistry.TradeOffsetCoreData memory core = CarbonEvidenceRegistry.TradeOffsetCoreData(t, t, true);
+        vm.prank(ADMIN);
+        uint256 gasBefore = gasleft();
+        registry.createTradeOffsetEvidence(input, project, core);
+        _assertWorstCaseGas("createTradeOffsetEvidence worst-case gas", gasBefore - gasleft());
+        _assertCommon(
+            registry.getEvidenceCommon(input.evidenceNo), input, CarbonEvidenceRegistry.EvidenceCategory.TradeOffset
+        );
+    }
+
+    function testWorstCaseAssetCreationFitsFiscoGasLimit() public {
+        CarbonEvidenceRegistry.EvidenceInput memory input = _maxInput("WORST-ASSET");
+        // The only matching file is last, so the pledge agreement scan visits every file.
+        input.fileList[input.fileList.length - 1].fileType = "pledgeAgreement";
+        string memory t = _repeatAscii(registry.MAX_TEXT_BYTES());
+        CarbonEvidenceRegistry.AssetProjectInfo memory project =
+            CarbonEvidenceRegistry.AssetProjectInfo(t, t, _repeatAscii(registry.MAX_ID_BYTES()), t, t, t);
+        CarbonEvidenceRegistry.AssetCoreData memory core = CarbonEvidenceRegistry.AssetCoreData(
+            t, true, true, true, _repeatAscii(registry.MAX_LONG_TEXT_BYTES()), true
+        );
+        vm.prank(ADMIN);
+        uint256 gasBefore = gasleft();
+        registry.createAssetEvidence(input, project, core);
+        _assertWorstCaseGas("createAssetEvidence worst-case gas", gasBefore - gasleft());
+        _assertCommon(
+            registry.getEvidenceCommon(input.evidenceNo), input, CarbonEvidenceRegistry.EvidenceCategory.Asset
+        );
+    }
+
+    function testWorstCaseTechnologyCreationFitsFiscoGasLimit() public {
+        CarbonEvidenceRegistry.EvidenceInput memory input = _maxInput("WORST-TECHNOLOGY");
+        string memory t = _repeatAscii(registry.MAX_TEXT_BYTES());
+        string memory l = _repeatAscii(registry.MAX_LONG_TEXT_BYTES());
+        CarbonEvidenceRegistry.TechnologyProjectInfo memory project =
+            CarbonEvidenceRegistry.TechnologyProjectInfo(t, t, t, t, t, t, l);
+        CarbonEvidenceRegistry.TechnologyCoreData memory core = CarbonEvidenceRegistry.TechnologyCoreData(t, t, t);
+        vm.prank(ADMIN);
+        uint256 gasBefore = gasleft();
+        registry.createTechnologyEvidence(input, project, core);
+        _assertWorstCaseGas("createTechnologyEvidence worst-case gas", gasBefore - gasleft());
+        _assertCommon(
+            registry.getEvidenceCommon(input.evidenceNo), input, CarbonEvidenceRegistry.EvidenceCategory.Technology
+        );
+    }
+
     function _createResource(string memory evidenceNo) private {
         vm.prank(ADMIN);
         require(
@@ -769,6 +872,40 @@ contract CarbonEvidenceRegistryTest {
                 1024
             );
         }
+    }
+
+    /// @dev Every common field, list and number at its accepted maximum.
+    function _maxInput(string memory prefix) private view returns (CarbonEvidenceRegistry.EvidenceInput memory input) {
+        string memory id = _repeatAscii(registry.MAX_ID_BYTES());
+        string memory t = _repeatAscii(registry.MAX_TEXT_BYTES());
+        string memory l = _repeatAscii(registry.MAX_LONG_TEXT_BYTES());
+        input.holderAddress = HOLDER;
+        input.evidenceNo =
+            string(abi.encodePacked(prefix, _repeatAscii(registry.MAX_ID_BYTES() - bytes(prefix).length)));
+        input.evidenceName = t;
+        input.certificateInfo = CarbonEvidenceRegistry.CertificateInfo(t, id, uint256(-1));
+        input.evidenceSubject = CarbonEvidenceRegistry.EvidenceSubjectInfo(t, t, id, t);
+        input.author = CarbonEvidenceRegistry.AuthorInfo(id, t, t, id);
+        input.orgInfo = CarbonEvidenceRegistry.OrganizationInfo(t, t, id, t, t, id, t, t);
+        input.purpose = new string[](registry.MAX_PURPOSES());
+        for (uint256 i = 0; i < input.purpose.length; i++) {
+            input.purpose[i] = t;
+        }
+        input.otherPurpose = l;
+        input.auditInstitution = t;
+        input.verificationSummary = l;
+        input.remark = l;
+        string memory fileField = _repeatAscii(MAX_FILE_FIELD_BYTES);
+        input.fileList = new CarbonEvidenceRegistry.FileInfo[](registry.MAX_FILES());
+        for (uint256 i = 0; i < input.fileList.length; i++) {
+            input.fileList[i] = CarbonEvidenceRegistry.FileInfo(fileField, fileField, fileField, uint256(-1));
+        }
+    }
+
+    /// @dev Measured from the caller, so ABI encoding is included; intrinsic calldata gas is not.
+    function _assertWorstCaseGas(string memory label, uint256 gasUsed) private {
+        emit log_named_uint(label, gasUsed);
+        require(gasUsed < FISCO_DEFAULT_TX_GAS_LIMIT, "worst case exceeds FISCO gas limit");
     }
 
     function _resourceProject() private pure returns (CarbonEvidenceRegistry.ResourceProjectInfo memory) {
